@@ -1,0 +1,29 @@
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/
+
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Logs and local outputs
+logs/
+*.log
+*.out
+*.err
+results/
+
+# Jupyter runtime files
+*.nbconvert.ipynb

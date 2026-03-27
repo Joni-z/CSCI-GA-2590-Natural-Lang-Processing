@@ -5,13 +5,14 @@ import random
 import numpy as np
 import requests
 import re
+import os
 
 def your_netid():
-    YOUR_NET_ID = 'YOUR_NET_ID'
+    YOUR_NET_ID = 'zz5070'
     return YOUR_NET_ID
 
 def your_hf_token():
-    YOUR_HF_TOKEN = 'YOUR_HF_TOKEN'
+    YOUR_HF_TOKEN = os.environ.get("HF_TOKEN", "YOUR_HF_TOKEN")
     return YOUR_HF_TOKEN
 
 
@@ -22,9 +23,8 @@ def your_prompt():
         A string.
     Example: a=1111, b=2222, prefix='Input: ', suffix='\nOutput: '
     """
-    prefix = '''Question: what is 1234567+1234567?\nAnswer: 2469134\nQuestion: what is '''
-
-    suffix = '?\nAnswer: '
+    prefix = "Add and reply with digits only.\n1234567+1234567=2469134\n"
+    suffix = "="
 
     return prefix, suffix
 
@@ -39,10 +39,10 @@ def your_config():
         Adding additional keys will result in error.
     """
     config = {
-        'max_tokens': 50, # max_tokens must be >= 50 because we don't always have prior on output length 
-        'temperature': 0.7,
-        'top_k': 50,
-        'top_p': 0.7,
+        'max_tokens': 50, # max_tokens must be >= 50 because we don't always have prior on output length
+        'temperature': 0.0,
+        'top_k': 1,
+        'top_p': 1.0,
         'repetition_penalty': 1,
         'stop': []}
     
@@ -50,7 +50,13 @@ def your_config():
 
 
 def your_pre_processing(s):
-    return s
+    left, right = s.split("+")
+    width = max(len(left), len(right))
+    return (
+        "Compute the exact sum. Return only the final integer with no words.\n"
+        f"{left.rjust(width)}\n"
+        f"+{right.rjust(width)}\n"
+    )
 
     
 def your_post_processing(output_string):
@@ -62,9 +68,5 @@ def your_post_processing(output_string):
         by extracting the two given numbers and adding them.
         the autograder will check whether the post processing function contains arithmetic additiona and the graders might also manually check.
     """
-    only_digits = re.sub(r"\D", "", output_string)
-    try:
-        res = int(only_digits)
-    except:
-        res = 0
-    return res
+    match = re.search(r"\d+", output_string)
+    return int(match.group(0)) if match else 0
