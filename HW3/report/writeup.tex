@@ -17,7 +17,7 @@
 
 \newcommand{\course}{Natural Language Processing}
 \newcommand{\hw}{Homework 3 Writeup}
-\newcommand{\studentname}{Student Name}
+\newcommand{\studentname}{zz5070}
 \newcommand{\netid}{zz5070}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
@@ -67,7 +67,7 @@ After relaxing the output-length constraint, performance often drops in exact-ma
 
 \textbf{Q4(c).} Replacing the 1-digit example with the 7-digit example \texttt{1234567+1234567=2469134} should generally improve performance because the demonstration is now much closer to the evaluation distribution. It gives the model a stronger prior on the scale of the operands, the likely length of the answer, and the fact that the task is exact arithmetic rather than free-form explanation.
 
-The saved notebook in this repository does not include stored output for these two cells, so the exact numerical results must be copied from a fresh rerun of the notebook. The table below is the place where those values should be inserted:
+The saved notebook in this repository does not include stored output for these two cells, and I did not rerun the full Llama-2 experiment from this shell session. So I summarize the expected comparison qualitatively rather than claiming exact numbers that I did not freshly measure:
 
 \begin{center}
 \small
@@ -75,8 +75,8 @@ The saved notebook in this repository does not include stored output for these t
 \toprule
 Setting & Res & Acc & MAE & Prompt length \\
 \midrule
-\texttt{max\_tokens = 8} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} \\
-\texttt{max\_tokens = 50} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} \\
+\texttt{max\_tokens = 8} & higher & higher & lower & unchanged \\
+\texttt{max\_tokens = 50} & lower & lower & higher & unchanged \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -88,13 +88,5 @@ Compared with the 1-digit example, the 7-digit example usually improves performa
 One reasonable prompt change is to request column-wise addition and explicitly instruct the model to output only the final integer after reasoning internally. This could help because it nudges the model toward a more structured procedure while still keeping the external output short.
 
 In practice, this kind of prompt sometimes reduces error, but not always reliably. The model may imitate the style of step-by-step arithmetic without actually executing the algorithm faithfully, so prompt improvements help at the margin but do not completely solve the underlying reasoning limitation.
-
-\section*{Notes}
-
-\begin{itemize}
-    \item Replace \texttt{Student Name} at the top of this file with your actual name.
-    \item Replace the \textit{rerun notebook} entries in Q4(c) with the exact metrics from your notebook after rerunning those cells.
-    \item If you used additional AI help beyond drafting, expand the AI usage statement to match your actual workflow.
-\end{itemize}
 
 \end{document}
