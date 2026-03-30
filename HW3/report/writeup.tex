@@ -1,0 +1,100 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt,partopsep=0pt}
+\setlist[enumerate]{topsep=2pt,itemsep=2pt,parsep=0pt,partopsep=0pt}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+\newcommand{\course}{Natural Language Processing}
+\newcommand{\hw}{Homework 3 Writeup}
+\newcommand{\studentname}{Student Name}
+\newcommand{\netid}{zz5070}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\begin{document}
+
+\begin{center}
+    {\Large \textbf{\hw}}\\
+    \course\\
+    \studentname\ (\netid)
+\end{center}
+
+\textbf{AI usage statement.} I used AI coding assistance to inspect the homework files, summarize experimental behavior, and help draft concise written explanations. I checked the final report against the assignment PDF, the provided notebook, and the code files before submission.
+
+\section*{Q2. Properties of Tokenizers}
+
+\textbf{Q2(b).} I used the tokenizer \texttt{google-bert/bert-base-cased} from Hugging Face. It is not injective because strings with different whitespace, such as \texttt{"hello world"} and \texttt{"hello   world"}, can map to the same token sequence. It is also not fully invertible because decoding does not always preserve the original spacing and boundary information exactly.
+
+The same tokenizer also does not preserve concatenation. For example, tokenizing \texttt{"h"} and \texttt{"ello"} separately does not produce the same result as tokenizing \texttt{"hello"} as a whole, because subword tokenization depends on surrounding context and longest useful merges.
+
+\textbf{Q2(c).} In general, a non-trivial tokenizer cannot preserve concatenation because useful tokenization decisions usually depend on adjacent context across the boundary between two substrings. If tokenization were always homomorphic with respect to concatenation, then the tokenizer could not adapt merges, whitespace handling, or word-piece segmentation based on neighboring characters, which removes most of the benefit of learned tokenization.
+
+\section*{Q3. Zero-shot Addition}
+
+\textbf{Q3(a).} Performance deteriorates from 1-digit to 7-digit addition because long addition requires multi-step algorithmic reasoning, correct carry propagation, and exact copying of several output digits. Language models are much better at recognizing common surface patterns than at executing a reliable digit-by-digit procedure over a long sequence.
+
+\textbf{Q3(b).} The configuration parameters control sampling and output length:
+\begin{itemize}
+    \item \texttt{temperature}: rescales the next-token distribution. Higher temperature makes output more random and usually less stable.
+    \item \texttt{max\_tokens}: limits how many new tokens the model can generate. Increasing it allows longer answers, but also gives the model more room to drift.
+    \item \texttt{top\_p}: nucleus sampling threshold. Higher values allow a larger probability mass of candidate tokens and usually increase diversity.
+    \item \texttt{top\_k}: keeps only the top \(k\) candidate tokens at each step. Higher values increase variety; very small values make decoding more deterministic.
+    \item \texttt{repetition\_penalty}: discourages repeating previously generated tokens. Increasing it can reduce loops or repeated text, but if set too high it can also hurt faithful digit generation.
+\end{itemize}
+In this task, larger sampling freedom usually hurts exact arithmetic because the correct answer benefits from deterministic decoding rather than creative variation.
+
+\textbf{Q3(c).} Qwen3-8B generally performs better than Llama-2-7B on this task because it is a newer and stronger instruction-tuned model. The likely reasons are better calibration on structured outputs, stronger instruction following, and more robust token-by-token generation when the task requires exact numeric patterns.
+
+\textbf{Q3(d).} When \texttt{max\_tokens} is increased from 8 to 20, the model usually becomes less reliable at exact-match evaluation. Without the prior that the output should stop after an 8-digit sum, it has more freedom to generate extra text, repeat the prompt pattern, or continue after the answer, which increases the chance of malformed outputs even if the correct number appears somewhere in the generation.
+
+\section*{Q4. In-context Learning}
+
+\textbf{Q4(a).} The baseline one-shot prompt usually improves over zero-shot 7-digit addition, but the improvement is limited because the demonstration is still out-of-distribution: it shows a 1-digit example while evaluation uses 7-digit numbers. The example helps the model infer the input-output format, but it still does not give much evidence for multi-step carry propagation on long numbers.
+
+\textbf{Q4(b).} A simple way to modify post-processing is to extract the integer that appears after the answer cue instead of assuming that the entire generation is only the number. For example, we can search the generated text for a span following \texttt{Answer:} or for the last integer on the final generated line, and then parse that digit span into an integer.
+
+After relaxing the output-length constraint, performance often drops in exact-match accuracy even when some outputs still contain the correct number somewhere in the text. The model now has more opportunity to add extra explanation, repeat the prompt format, or continue generating unrelated tokens, so the burden shifts from generation control to robust extraction.
+
+\textbf{Q4(c).} Replacing the 1-digit example with the 7-digit example \texttt{1234567+1234567=2469134} should generally improve performance because the demonstration is now much closer to the evaluation distribution. It gives the model a stronger prior on the scale of the operands, the likely length of the answer, and the fact that the task is exact arithmetic rather than free-form explanation.
+
+The saved notebook in this repository does not include stored output for these two cells, so the exact numerical results must be copied from a fresh rerun of the notebook. The table below is the place where those values should be inserted:
+
+\begin{center}
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.8cm}cccc}
+\toprule
+Setting & Res & Acc & MAE & Prompt length \\
+\midrule
+\texttt{max\_tokens = 8} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} \\
+\texttt{max\_tokens = 50} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} & \textit{rerun notebook} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Compared with the 1-digit example, the 7-digit example usually improves performance because it better matches the scale and structure of the evaluation data. The model can imitate a more relevant pattern instead of trying to extrapolate from a trivial single-digit case.
+
+\textbf{Q4(d).} The error can change across repeated runs when stochastic decoding is enabled, because different random choices can lead to different carry mistakes or different malformed completions. If decoding is made close to deterministic, the outputs become much more stable from run to run.
+
+One reasonable prompt change is to request column-wise addition and explicitly instruct the model to output only the final integer after reasoning internally. This could help because it nudges the model toward a more structured procedure while still keeping the external output short.
+
+In practice, this kind of prompt sometimes reduces error, but not always reliably. The model may imitate the style of step-by-step arithmetic without actually executing the algorithm faithfully, so prompt improvements help at the margin but do not completely solve the underlying reasoning limitation.
+
+\section*{Notes}
+
+\begin{itemize}
+    \item Replace \texttt{Student Name} at the top of this file with your actual name.
+    \item Replace the \textit{rerun notebook} entries in Q4(c) with the exact metrics from your notebook after rerunning those cells.
+    \item If you used additional AI help beyond drafting, expand the AI usage statement to match your actual workflow.
+\end{itemize}
+
+\end{document}
