@@ -67,26 +67,39 @@ After relaxing the output-length constraint, performance often drops in exact-ma
 
 \textbf{Q4(c).} Replacing the 1-digit example with the 7-digit example \texttt{1234567+1234567=2469134} should generally improve performance because the demonstration is now much closer to the evaluation distribution. It gives the model a stronger prior on the scale of the operands, the likely length of the answer, and the fact that the task is exact arithmetic rather than free-form explanation.
 
-The saved notebook in this repository does not include stored output for these two cells, and I did not rerun the full Llama-2 experiment from this shell session. So I summarize the expected comparison qualitatively rather than claiming exact numbers that I did not freshly measure:
-
 \begin{center}
 \small
 \begin{tabular}{>{\raggedright\arraybackslash}p{2.8cm}cccc}
 \toprule
 Setting & Res & Acc & MAE & Prompt length \\
 \midrule
-\texttt{max\_tokens = 8} & higher & higher & lower & unchanged \\
-\texttt{max\_tokens = 50} & lower & lower & higher & unchanged \\
+\texttt{max\_tokens = 8} & \(-0.2053\) & \(0.2\) & \(820{,}790.0\) & \(79\) \\
+\texttt{max\_tokens = 50} & \(0.0\) & \(0.0\) & \(819{,}866.5\) & \(79\) \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Compared with the 1-digit example, the 7-digit example usually improves performance because it better matches the scale and structure of the evaluation data. The model can imitate a more relevant pattern instead of trying to extrapolate from a trivial single-digit case.
+Compared with the 1-digit example, the 7-digit example clearly helps when \texttt{max\_tokens = 8}: in my run, accuracy improved from \(0.0\) to \(0.2\). However, when \texttt{max\_tokens = 50}, the model again tends to continue generating instead of stopping cleanly, so accuracy falls back to \(0.0\). The more in-distribution example helps the model imitate the correct format and answer length, but it still does not make the model reliably execute long addition.
 
 \textbf{Q4(d).} The error can change across repeated runs when stochastic decoding is enabled, because different random choices can lead to different carry mistakes or different malformed completions. If decoding is made close to deterministic, the outputs become much more stable from run to run.
 
-One reasonable prompt change is to request column-wise addition and explicitly instruct the model to output only the final integer after reasoning internally. This could help because it nudges the model toward a more structured procedure while still keeping the external output short.
+In the saved debug example, the model sometimes continues the \texttt{Question/Answer} pattern and produces an output such as \texttt{101010090} for \(9090909+1010101\), even though the correct answer is \(10101010\). This illustrates that the model is often pattern-completing rather than faithfully computing the sum.
 
-In practice, this kind of prompt sometimes reduces error, but not always reliably. The model may imitate the style of step-by-step arithmetic without actually executing the algorithm faithfully, so prompt improvements help at the margin but do not completely solve the underlying reasoning limitation.
+One reasonable prompt change is to use a more in-distribution 7-digit example and explicitly request only the final answer on the first line. This could help because it gives the model a stronger format prior and reduces the chance that it keeps generating additional \texttt{Question/Answer} text.
+
+In practice, this helps somewhat but not reliably. The 7-digit example improved exact-match performance in Q4(c) when \texttt{max\_tokens = 8}, but larger generation budgets still caused continuation and numeric mistakes. So prompt changes can reduce some errors, but they do not fully solve the underlying arithmetic weakness of the model.
+
+\section*{Submission Checklist}
+
+According to the assignment PDF, the final submission should contain the following five files:
+\begin{itemize}
+    \item written report PDF generated from \texttt{report/writeup.tex}
+    \item \texttt{part1/src/bpe.py}
+    \item \texttt{part1/tests/test\_tokenizer.py}
+    \item \texttt{part2/submission.py}
+    \item \texttt{part2/prompting\_exercises.ipynb}
+\end{itemize}
+
+For Part 2, Q5 is coding-only, so there is no separate written answer beyond documenting AI usage and keeping the report consistent with the notebook experiments.
 
 \end{document}
