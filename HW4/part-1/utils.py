@@ -10,11 +10,76 @@ from tqdm.auto import tqdm
 import evaluate
 import random
 import argparse
-from nltk.corpus import wordnet
+import hashlib
 from nltk import word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 
 random.seed(0)
+
+KEYBOARD_NEIGHBORS = {
+    "a": "qwsz",
+    "b": "vghn",
+    "c": "xdfv",
+    "d": "erfcxs",
+    "e": "rdsw",
+    "f": "rtgvcd",
+    "g": "tyhbvf",
+    "h": "yujnbg",
+    "i": "uojk",
+    "j": "uikmnh",
+    "k": "iolmj",
+    "l": "opk",
+    "m": "njk",
+    "n": "bhjm",
+    "o": "ipkl",
+    "p": "ol",
+    "q": "wa",
+    "r": "tfde",
+    "s": "wedxza",
+    "t": "ygfr",
+    "u": "yihj",
+    "v": "cfgb",
+    "w": "qase",
+    "x": "zsdc",
+    "y": "uhtg",
+    "z": "asx",
+}
+
+
+def _inject_typo(token, rng):
+    valid_positions = [idx for idx, ch in enumerate(token) if ch.lower() in KEYBOARD_NEIGHBORS]
+    if not valid_positions:
+        return token
+
+    position = rng.choice(valid_positions)
+    replacement = rng.choice(KEYBOARD_NEIGHBORS[token[position].lower()])
+    if token[position].isupper():
+        replacement = replacement.upper()
+
+    chars = list(token)
+    chars[position] = replacement
+    return "".join(chars)
+
+
+def _drop_vowel(token, rng):
+    vowel_positions = [idx for idx, ch in enumerate(token) if ch.lower() in "aeiou"]
+    if len(token) <= 4 or not vowel_positions:
+        return token
+
+    position = rng.choice(vowel_positions)
+    return token[:position] + token[position + 1:]
+
+
+def _duplicate_character(token, rng):
+    if len(token) <= 4:
+        return token
+
+    valid_positions = [idx for idx, ch in enumerate(token) if ch.isalpha()]
+    if not valid_positions:
+        return token
+
+    position = rng.choice(valid_positions)
+    return token[:position + 1] + token[position] + token[position + 1:]
 
 
 def example_transform(example):
@@ -44,7 +109,24 @@ def custom_transform(example):
 
     # You should update example["text"] using your transformation
 
-    raise NotImplementedError
+    seed = int(hashlib.md5(example["text"].encode("utf-8")).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    transformed_tokens = []
+
+    for token in word_tokenize(example["text"]):
+        transformed_token = token
+        if token.isalpha() and len(token) > 4:
+            noise_roll = rng.random()
+            if noise_roll < 0.10:
+                transformed_token = _inject_typo(transformed_token, rng)
+            elif noise_roll < 0.13:
+                transformed_token = _drop_vowel(transformed_token, rng)
+            elif noise_roll < 0.15:
+                transformed_token = _duplicate_character(transformed_token, rng)
+
+        transformed_tokens.append(transformed_token)
+
+    example["text"] = TreebankWordDetokenizer().detokenize(transformed_tokens)
 
     ##### YOUR CODE ENDS HERE ######
 

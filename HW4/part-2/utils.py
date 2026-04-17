@@ -4,6 +4,7 @@ import os
 import re
 import pickle
 import random
+import time
 from tqdm import tqdm
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,6 +13,7 @@ from typing import List, Any
 import torch
 
 DB_PATH = 'data/flight_database.db'
+SQLITE_QUERY_TIMEOUT_SECS = 5
 
 def compute_metrics(gt_path: str, model_path: str, gt_query_records: str = None, model_query_records: str = None):
     '''
@@ -91,14 +93,14 @@ def compute_records(processed_qs: List[str]):
     Input:
         * processed_qs (List[str]): The list of SQL queries to execute
     '''
-    num_threads = 10
+    num_threads = min(16, os.cpu_count() or 1)
     timeout_secs = 120
 
     pool = ThreadPoolExecutor(num_threads)
     futures = []
     for i, query in enumerate(processed_qs):
         futures.append(pool.submit(compute_record, i, query))
-        
+
     rec_dict = {}
     try:
         for x in tqdm(as_completed(futures, timeout=timeout_secs)):
@@ -108,6 +110,8 @@ def compute_records(processed_qs: List[str]):
         for future in futures:
             if not future.done():
                 future.cancel()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
             
     recs = []
     error_msgs = []
@@ -125,6 +129,12 @@ def compute_records(processed_qs: List[str]):
 def compute_record(query_id, query):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    start_time = time.monotonic()
+
+    def stop_slow_query():
+        return int(time.monotonic() - start_time > SQLITE_QUERY_TIMEOUT_SECS)
+
+    conn.set_progress_handler(stop_slow_query, 10000)
 
     try:
         cursor.execute(query)

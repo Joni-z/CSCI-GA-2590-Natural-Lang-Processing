@@ -25,5 +25,15 @@ logs/
 *.err
 results/
 
+# HW4 generated data, caches, and training outputs
+HW4/.hf-cache/
+HW4/part-1/nltk_data/
+HW4/part-1/out/
+HW4/part-1/out_augmented/
+HW4/part-1/out_*.txt
+HW4/part-2/checkpoints/
+HW4/part-2/records/*.pkl
+HW4/slurm/
+
 # Jupyter runtime files
 *.nbconvert.ipynb

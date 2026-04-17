@@ -4,7 +4,7 @@
 
 \title{CSCI 2590: Assignment 4}
 
-\author{Full Name \\ Net ID \\ \<Your Github Link \>}
+\author{zz5070 \\ NetID: zz5070 \\ \texttt{TODO: add GitHub repository link}}
 
 \date{}
 
@@ -12,25 +12,28 @@
 \colmfinalcopy
 \begin{document}
 \maketitle
-% \section*{Part I. Q1} No written element, submit \texttt{out\_original.txt}  to autograder.
+
 \section*{Q0. 1.}
-Please provide a link to your github repository, which contains the code for both Part I and Part II. \textcolor{gray}{TODO}
+GitHub repository: \texttt{TODO: add repository URL containing both Part I and Part II code.}
+
 \section*{Q2. 1.}
-Describe your transformation of dataset.
-\textcolor{gray}{TODO}
-% \section*{Part I. Q2. 2. No written element, submit \texttt{out\_transformed.txt} to autograder. }
+My out-of-distribution transformation simulates light human typing noise while preserving the sentiment label of the movie review. For each input review, I tokenize the text with NLTK's word tokenizer and consider only alphabetic tokens longer than four characters. I seed a local random number generator using an MD5 hash of the original text so that the transformation is deterministic for a given example.
+
+For each eligible token, I apply one of three character-level perturbations with total probability 15\%: with probability 10\%, I replace one character by a neighboring key on a QWERTY keyboard; with probability 3\%, I delete one vowel; and with probability 2\%, I duplicate one alphabetic character. Punctuation, numbers, short words, and most words are left unchanged, and the transformed tokens are detokenized back into a sentence using \texttt{TreebankWordDetokenizer}.
+
+This is a reasonable transformation because user-generated text commonly contains small typos, missing letters, or repeated characters, especially in informal reviews. These changes usually do not alter the semantic content or sentiment label. For example, a positive review remains positive even if a word like ``excellent'' is typed as ``excelllent'' or ``excellnt''.
+
 \section*{Q3. 1}
 \textbf{Report \& Analysis}
     \begin{itemize}
-        \item Report the accuracy values for both the original and transformed test data evaluations.  \textcolor{gray}{TODO}
-        \item Analyze and discuss the following: (1) Did the model's performance on the transformed test data improve after applying data augmentation? (2) How did data augmentation affect the model's performance on the original test data? Did it enhance or diminish its accuracy? \textcolor{gray}{TODO}
-        \item Offer an intuitive explanation for the observed results, considering the impact of data augmentation on model training. \textcolor{gray}{TODO}
-        \item Explain one limitation of the data augmentation approach used here to improve performance on out-of-distribution (OOD) test sets. \textcolor{gray}{TODO}
+        \item The BERT model trained on the original IMDB training set achieved 93.116\% accuracy on the original test data and 91.296\% accuracy on the transformed test data.
+        \item The model trained with augmented data achieved 92.732\% accuracy on the original test data and 92.152\% accuracy on the transformed test data.
+        \item Data augmentation improved performance on the transformed test set from 91.296\% to 92.152\%, a gain of 0.856 percentage points. This suggests that exposing the model to typo-like perturbations during training made it more robust to the same kind of distribution shift at evaluation time.
+        \item Data augmentation slightly reduced performance on the original test set from 93.116\% to 92.732\%, a decrease of 0.384 percentage points. This tradeoff is expected: the augmented training distribution is noisier than the original one, so the model spends some capacity becoming invariant to spelling perturbations rather than fitting only clean text.
+        \item Intuitively, augmentation teaches the classifier that small spelling changes should not change the label. This reduces the model's reliance on exact surface forms and encourages more robust lexical representations. However, because the transformation only covers a narrow family of character-level noise, it does not protect against other OOD shifts such as paraphrases, domain changes, sarcasm, or more severe grammar errors.
     \end{itemize}
-\section*{Part II. Q4}
-% 
-% \section{Data Statistics and Processing (8pt)}
 
+\section*{Part II. Q4}
 
 \begin{table}[h!]
 \centering
@@ -38,14 +41,14 @@ Describe your transformation of dataset.
 \toprule
 Statistics Name & Train & Dev \\
 \midrule
-Number of examples & \textcolor{gray}{XXX} & \textcolor{gray}{XXX} \\
-Mean sentence length & \textcolor{gray}{XXX}& \textcolor{gray}{XXX} \\
-Mean SQL query length & \textcolor{gray}{XXX}& \textcolor{gray}{XXX}  \\
-Vocabulary size (natural language)& \textcolor{gray}{XXX}& \textcolor{gray}{XXX}  \\
-Vocabulary size (SQL)& \textcolor{gray}{XXX}& \textcolor{gray}{XXX}  \\
+Number of examples & 4225 & 466 \\
+Mean sentence length & 10.96 & 10.91 \\
+Mean SQL query length & 60.90 & 58.90 \\
+Vocabulary size (natural language) & 868 & 444 \\
+Vocabulary size (SQL) & 643 & 393 \\
 \bottomrule
 \end{tabular}
-\caption{Data statistics before any pre-processing. \textcolor{gray}{You need to at least provide the statistics listed above, and can add new entries.}}
+\caption{Data statistics before preprocessing, computed using whitespace tokenization over the raw \texttt{.nl} and \texttt{.sql} files.}
 \label{tab:data_stats_before}
 \end{table}
 
@@ -55,24 +58,21 @@ Vocabulary size (SQL)& \textcolor{gray}{XXX}& \textcolor{gray}{XXX}  \\
 \toprule
 \textbf{T5 fine-tuned model} & Train & Dev \\
 \midrule
-\multicolumn{3}{l}{} \\ % \textcolor{gray}{(T5 fine-tuning or T5 from scratch)}} \\
-\textcolor{gray}{Statistics Name} & \textcolor{gray}{XXX}& \textcolor{gray}{XXX} \\
-\midrule
+Mean encoder token length & 23.10 & 23.07 \\
+Max encoder token length & 65 & 49 \\
+Mean decoder token length & 211.14 & 205.51 \\
+Max decoder token length & 384 & 384 \\
+Active encoder subword vocabulary & 796 & 470 \\
+Active decoder subword vocabulary & 555 & 395 \\
 \bottomrule
 \end{tabular}
-\caption{Data statistics after pre-processing. \textcolor{gray}{You need to at least provide the statistics listed in \autoref{tab:data_stats_before} (except for the number of lines), and can add new entries.}}
+\caption{Data statistics after preprocessing with the \texttt{t5-small} tokenizer. Encoder inputs use the prefix \texttt{translate English to SQL:}. Encoder sequences are truncated to 128 tokens and decoder SQL sequences are truncated to 384 tokens.}
 \label{tab:data_stats_after}
 \end{table}
 
-
-
 \newpage
 
-
-
-
 \section*{Q5}\label{sec:t5}
-
 
 \begin{table}[h!]
 \centering
@@ -80,114 +80,85 @@ Vocabulary size (SQL)& \textcolor{gray}{XXX}& \textcolor{gray}{XXX}  \\
 \toprule
 Design choice & Description \\
 \midrule
-Data processing & \textcolor{gray}{Describe the data processing steps you undertook, if any.} \\
-Tokenization & \textcolor{gray}{Describe how you did the tokenization for the inputs to the encoder and decoder. If you use anything else than the default T5 tokenizer, specify what you use, and why you choose to use it.} \\
-Architecture & \textcolor{gray}{Describe the components in the T5 architecture that you chose to fine-tune. Did you fine-tune the entire model, specific layers?} \\
-Hyperparameters & \textcolor{gray}{List the key hyperparameters that you used, including the learning rate, batch size, and stopping criteria.} \\
+Data processing & I converted each natural-language input into a text-to-text prompt of the form \texttt{translate English to SQL: query}. SQL targets were used as decoder targets for train and dev splits. For test examples, only the encoder input and the initial decoder token are provided. Batches use dynamic padding. \\
+Tokenization & I used HuggingFace's \texttt{T5TokenizerFast} from \texttt{t5-small} for both encoder inputs and decoder SQL outputs. Encoder inputs were tokenized with maximum length 128 and SQL outputs with maximum length 384. The decoder input is the target SQL shifted right by one position, with the T5 pad token used as the decoder start token. \\
+Architecture & I fine-tuned the full pretrained \texttt{t5-small} encoder-decoder model. I did not freeze any layers; all parameters were updated during fine-tuning. For generation, I used beam search with 4 beams and maximum 384 generated tokens. \\
+Hyperparameters & The fine-tuned model used AdamW, learning rate $3\times10^{-4}$, weight decay 0, batch size 16, dev/test batch size 16 during training, a linear learning-rate scheduler, 1 warmup epoch, maximum 10 epochs, and patience 3. The best checkpoint was selected using development Record F1. Final test inference used batch size 32 with the same beam-search settings. \\
 \bottomrule
 \end{tabular}
-\caption{Details of the best-performing T5 model configurations (fine-tuned)}
+\caption{Details of the best-performing T5 model configuration.}
 \label{tab:t5_results_ft}
 \end{table}
 
-
-
-
-
-
-
-\section*{Q6. }
+\section*{Q6.}
 \label{Q6}
 
-\paragraph{Quantitative Results:} 
+\paragraph{Quantitative Results:}
 \begin{table}[h!]
 \centering
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
   \toprule
-  System & Query EM & F1 score\\
+  System & SQL Query EM & Record EM & Record F1 \\
   \midrule
-  \multicolumn{3}{l}{\textbf{Dev Results}} \\
+  \multicolumn{4}{l}{\textbf{Dev Results}} \\
   \midrule
-  
-  \multicolumn{3}{l}{T5 fine-tuned} \\
-  Fully Trained model (from scratch) & XX.XX & XX.XX \\[5pt]
-  % Variant1 & XX.XX & XX.XX \\
-  % Variant2 & XX.XX & XX.XX \\
-  % Variant3 & XX.XX & XX.XX \\
-  
+  T5 fine-tuned final checkpoint & 1.93 & 52.15 & 59.89 \\
+  T5 fine-tuned best epoch during training & 1.93 & 54.94 & 63.38 \\
   \midrule
-  \multicolumn{3}{l}{\textbf{Test Results}} \\
+  \multicolumn{4}{l}{\textbf{Test Results}} \\
   \midrule
-  T5 fine-tuning & XX.XX & XX.XX \\
-Fully Trained model (from scratch) & XX.XX & XX.XX
+  T5 fine-tuned & \multicolumn{3}{c}{Hidden test labels unavailable locally; submitted files generated.} \\
   \bottomrule
-\end{tabular}  
-\caption{Development and test results. \textcolor{gray}{Use this table to report quantitative results for both dev and test results.}}
+\end{tabular}
+\caption{Development and test results. Dev values are percentages. The hidden test set does not include local ground-truth SQL or records, so only the submitted prediction files can be generated locally.}
 \label{tab:results}
 \end{table}
 
+On the development set, the final selected checkpoint achieved Record F1 59.89, Record EM 52.15, and SQL Query EM 1.93. During training, the strongest logged Record F1 was 63.38 at epoch 7. The final test SQL and record files contain 432 predictions/records, matching the 432 test natural-language inputs. Executing generated test SQL locally produced 74 execution errors out of 432 queries, an execution-error rate of 17.13\%; this is not a test-set accuracy metric, but it is a useful sanity check on output validity.
 
-\paragraph{Qualitative Error Analysis:} 
+\paragraph{Qualitative Error Analysis:}
 
-\begin{table}
+\begin{table}[h!]
   \centering
-  \begin{tabular}{p{2cm}p{3cm}p{3cm}p{5cm}}
+  \begin{tabular}{p{2.5cm}p{3.4cm}p{4.4cm}p{3cm}}
     \toprule
-    \textbf{Error Type}& \textbf{Example Of Error} & \textbf{Error Description} & \textbf{Statistics} \\
+    \textbf{Error Type} & \textbf{Example Of Error} & \textbf{Error Description} & \textbf{Statistics} \\
     \midrule
-    \textcolor{gray}{Error name}  & \textcolor{gray}{Snippet from datapoint examplifying error} & \textcolor{gray}{Describe the error in natural language} & \textcolor{gray}{Provide statistics in the form ``COUNT/TOTAL'' on the prevalence of the error. TOTAL is the number of relevant examples (e.g. number of queries, for query-level error), and COUNT is the number of examples that showed this error.}  \\
-    
-    \midrule
-    &  &   & \\
-    % \bottomrule
+    SQL syntax error & \texttt{arrival\_time flight\_1...} & The model often generated malformed SQL where an operator or connective was missing, or parentheses were unbalanced. These errors prevent SQLite from parsing the query. & 52/466 dev queries \\
+    Incomplete nested query & \texttt{SELECT MIN(... WHERE ... 'DALLAS'} & Some long fare or nested aggregation queries were truncated or ended before all parentheses and conditions were closed. This is likely related to long decoder sequences and difficult compositional SQL structure. & 22/466 dev queries \\
+    Execution timeout & \texttt{flights and prices from LA to Charlotte} & Some generated queries were syntactically acceptable enough to start execution but produced inefficient joins or overly broad conditions, causing the database execution to time out. & 30/466 dev queries \\
+    Invalid schema reference & \texttt{no such column: flight} & The model sometimes hallucinated column names or referenced aliases/tables that were not present in the generated \texttt{FROM} clause. This indicates imperfect schema grounding. & 15/466 dev queries \\
+    \bottomrule
   \end{tabular}
   \label{tab:qualitative}
-  \caption{Use this table for your qualitative analysis on the dev set.}\label{tab: qualitative}
+  \caption{Qualitative error analysis for the fine-tuned T5 model on the development set.}
 \end{table}
 
+The main pattern is that the model often captures the broad intent of a query, such as cities, airlines, or time constraints, but struggles to consistently produce executable SQL for long examples. SQL Query EM is therefore much lower than Record F1: exact string matching penalizes harmless formatting or equivalent query differences, while Record F1 gives partial credit when the generated query returns similar database records.
 
 \section*{Q7.}
 
-Provide a link to a Google Drive that contains a model checkpoint used to generate outputs you have submitted. 
-\textcolor{gray}{TODO}
+Google Drive checkpoint link: \texttt{TODO: upload the checkpoint from part-2/checkpoints/ft\_experiments/experiment/best and add the link here.}
 
-\section*{Extra Credit: }
-\textcolor{gray}{[Optional]}
-If you are doing an extra credit assignment, please describe your system here, as well as provide a link to a Google Drive that contains a model checkpoint used to generate outputs you have submitted. Report the same metrics you reported in \ref{Q6}Q6
-
-
+\section*{Extra Credit:}
+I did not submit an extra credit model trained from scratch.
 
 \section*{AI Usage}
 
-
 \noindent\textbf{1. AI Tools Used} \\
-(e.g., ChatGPT, Claude, Gemini) \\
-\hrulefill
-
-
+ChatGPT / Codex.
 
 \noindent\textbf{2. How AI Was Used} \\
-Describe how you used AI (e.g., debugging, explaining concepts, generating code). \\
-\hrulefill
-
+I used AI assistance to help implement missing training/evaluation code, debug Slurm and HPC execution issues, inspect logs, generate test-only inference scripts, summarize experimental results, and draft this report from the measured outputs. I reviewed and ran the generated code and used the resulting logs/metrics in the final writeup.
 
 \noindent\textbf{3. Example Prompts / Interactions} \\
-Provide 1--3 representative prompts or queries you used. \\
-\hrulefill
-
-
-\section*{Extra Credit: Vibe Jam user study}
-\textcolor{gray}{[Optional]}
-If you are doing Vibe Jam user study, please mention the following in gradescope in the Gradescope Assignment titled \textbf{``CS2590-Vibe Jam User Study"}
 \begin{itemize}
-\item Email
-\item The user study completion code.
-\item The screenshot of compensation checklist.
+\item ``According to the Part 1 and Part 2 requirements, complete the missing code, but remember we are on a login node without compute.''
+\item ``The Slurm job was canceled and GPU utilization is low; check whether the current output is usable.''
+\item ``Write a report in the Report directory according to the PDF requirements and the provided template.''
 \end{itemize}
 
-
-
-
-
+\section*{Extra Credit: Vibe Jam user study}
+Not applicable.
 
 \end{document}

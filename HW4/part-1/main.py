@@ -45,7 +45,18 @@ def do_train(args, model, train_dataloader, save_dir="./out"):
     # You can use progress_bar.update(1) to see the progress during training
     # You can refer to the pytorch tutorial covered in class for reference
 
-    raise NotImplementedError
+    optimizer.zero_grad()
+    for _ in range(num_epochs):
+        for batch in train_dataloader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            loss = outputs.loss
+
+            loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+            progress_bar.update(1)
 
     ##### YOUR CODE ENDS HERE ######
 
@@ -93,7 +104,27 @@ def create_augmented_dataloader(args, dataset):
     # dataloader will be for the original training split augmented with 5k random transformed examples from the training set.
     # You may find it helpful to see how the dataloader was created at other place in this code.
 
-    raise NotImplementedError
+    base_train_dataset = dataset["train"]
+    augmented_sample_size = 5000
+
+    if args.debug_train:
+        base_train_dataset = base_train_dataset.shuffle(seed=42).select(range(4000))
+        augmented_sample_size = 500
+
+    augmented_examples = (
+        dataset["train"]
+        .shuffle(seed=42)
+        .select(range(augmented_sample_size))
+        .map(custom_transform, load_from_cache_file=False)
+    )
+
+    augmented_train_dataset = datasets.concatenate_datasets([base_train_dataset, augmented_examples])
+    augmented_train_dataset = augmented_train_dataset.map(tokenize_function, batched=True, load_from_cache_file=False)
+    augmented_train_dataset = augmented_train_dataset.remove_columns(["text"])
+    augmented_train_dataset = augmented_train_dataset.rename_column("label", "labels")
+    augmented_train_dataset.set_format("torch")
+
+    train_dataloader = DataLoader(augmented_train_dataset, shuffle=True, batch_size=args.batch_size)
 
     ##### YOUR CODE ENDS HERE ######
 
@@ -157,8 +188,12 @@ if __name__ == "__main__":
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
-    # Tokenize the dataset
+    # Only keep the train/test splits we actually use for this homework.
     dataset = load_dataset("imdb")
+    dataset = datasets.DatasetDict({
+        "train": dataset["train"],
+        "test": dataset["test"],
+    })
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
     # Prepare dataset for use by model
@@ -194,6 +229,8 @@ if __name__ == "__main__":
     # Train model on the augmented training dataset
     if args.train_augmented:
         train_dataloader = create_augmented_dataloader(args, dataset)
+        print(f"Augmented training...")
+        print(f"len(train_dataloader): {len(train_dataloader)}")
         model = AutoModelForSequenceClassification.from_pretrained("bert-base-cased", num_labels=2)
         model.to(device)
         do_train(args, model, train_dataloader, save_dir="./out_augmented")

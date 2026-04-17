@@ -5,13 +5,24 @@ import torch
 import transformers
 from transformers import T5ForConditionalGeneration, T5Config
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
-import wandb
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+MODEL_NAME = 't5-small'
 
 def setup_wandb(args):
     # Implement this if you wish to use wandb in your experiments
-    pass
+    if wandb is None:
+        raise ImportError("wandb is not installed, but --use_wandb was provided.")
+    wandb.init(
+        project='nlp-hw4-part2',
+        name=args.experiment_name,
+        config=vars(args),
+    )
 
 def initialize_model(args):
     '''
@@ -20,7 +31,13 @@ def initialize_model(args):
     or training a T5 model initialized with the 'google-t5/t5-small' config
     from scratch.
     '''
-    pass
+    if args.finetune:
+        model = T5ForConditionalGeneration.from_pretrained(MODEL_NAME)
+    else:
+        config = T5Config.from_pretrained(MODEL_NAME)
+        model = T5ForConditionalGeneration(config)
+
+    return model.to(DEVICE)
 
 def mkdir(dirpath):
     if not os.path.exists(dirpath):
@@ -31,11 +48,20 @@ def mkdir(dirpath):
 
 def save_model(checkpoint_dir, model, best):
     # Save model checkpoint to be able to load the model later
-    pass
+    save_dir = os.path.join(checkpoint_dir, 'best' if best else 'last')
+    mkdir(save_dir)
+    model_to_save = model.module if hasattr(model, 'module') else model
+    model_to_save.save_pretrained(save_dir)
 
 def load_model_from_checkpoint(args, best):
     # Load model from a checkpoint
-    pass
+    model_type = 'ft' if args.finetune else 'scr'
+    checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', args.experiment_name)
+    load_dir = os.path.join(checkpoint_dir, 'best' if best else 'last')
+    if not os.path.exists(load_dir):
+        load_dir = os.path.join(checkpoint_dir, 'last')
+    model = T5ForConditionalGeneration.from_pretrained(load_dir)
+    return model.to(DEVICE)
 
 def initialize_optimizer_and_scheduler(args, model, epoch_length):
     optimizer = initialize_optimizer(args, model)
@@ -65,7 +91,7 @@ def initialize_optimizer(args, model):
             optimizer_grouped_parameters, lr=args.learning_rate, eps=1e-8, betas=(0.9, 0.999)
         )
     else:
-        pass
+        raise NotImplementedError(f"Unsupported optimizer type: {args.optimizer_type}")
 
     return optimizer
         
@@ -93,4 +119,3 @@ def get_parameter_names(model, forbidden_layer_types):
     # Add model specific parameters (defined with nn.Parameter) since they are not in any child.
     result += list(model._parameters.keys())
     return result
-

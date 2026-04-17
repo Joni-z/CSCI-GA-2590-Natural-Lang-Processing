@@ -5,15 +5,27 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import numpy as np
-import wandb
 
 from t5_utils import initialize_model, initialize_optimizer_and_scheduler, save_model, load_model_from_checkpoint, setup_wandb
 from transformers import GenerationConfig
-from load_data import load_t5_data
+from transformers import T5TokenizerFast
+from load_data import load_t5_data, get_dataloader
 from utils import compute_metrics, save_queries_and_records
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 PAD_IDX = 0
+MODEL_NAME = 't5-small'
+
+
+def build_generation_config(args, model):
+    return GenerationConfig(
+        max_new_tokens=args.max_new_tokens,
+        num_beams=args.num_beams,
+        early_stopping=True,
+        pad_token_id=model.config.pad_token_id,
+        eos_token_id=model.config.eos_token_id,
+        decoder_start_token_id=model.config.decoder_start_token_id,
+    )
 
 def get_args():
     '''
@@ -43,10 +55,18 @@ def get_args():
                         help="If set, we will use wandb to keep track of experiments")
     parser.add_argument('--experiment_name', type=str, default='experiment',
                         help="How should we name this experiment?")
+    parser.add_argument('--eval_only', action='store_true',
+                        help="Load the best checkpoint, run dev evaluation, then run test inference.")
+    parser.add_argument('--test_only', action='store_true',
+                        help="Load the best checkpoint and only run test inference.")
 
     # Data hyperparameters
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--test_batch_size', type=int, default=16)
+
+    # Generation hyperparameters
+    parser.add_argument('--max_new_tokens', type=int, default=384)
+    parser.add_argument('--num_beams', type=int, default=4)
 
     args = parser.parse_args()
     return args
@@ -58,9 +78,9 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
     model_type = 'ft' if args.finetune else 'scr'
     checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', args.experiment_name)
     gt_sql_path = os.path.join(f'data/dev.sql')
-    gt_record_path = os.path.join(f'records/dev_gt_records.pkl')
-    model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_dev.sql')
-    model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_dev.pkl')
+    gt_record_path = os.path.join('records/ground_truth_dev.pkl')
+    model_sql_path = os.path.join(f'results/t5_{model_type}_{args.experiment_name}_dev.sql')
+    model_record_path = os.path.join(f'records/t5_{model_type}_{args.experiment_name}_dev.pkl')
     for epoch in range(args.max_n_epochs):
         tr_loss = train_epoch(args, model, train_loader, optimizer, scheduler)
         print(f"Epoch {epoch}: Average train loss was {tr_loss}")
@@ -138,16 +158,117 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
     should both provide good results. If you find that this component of evaluation takes too long with your compute,
     we found the cross-entropy loss (in the evaluation set) to be well (albeit imperfectly) correlated with F1 performance.
     '''
-    # TODO
     model.eval()
-    return 0, 0, 0, 0, 0
+    tokenizer = T5TokenizerFast.from_pretrained(MODEL_NAME)
+    generation_config = build_generation_config(args, model)
+    criterion = nn.CrossEntropyLoss()
+    total_loss = 0
+    total_tokens = 0
+    generated_queries = []
+
+    with torch.no_grad():
+        for encoder_input, encoder_mask, decoder_input, decoder_targets, initial_decoder_inputs in tqdm(dev_loader):
+            encoder_input = encoder_input.to(DEVICE)
+            encoder_mask = encoder_mask.to(DEVICE)
+            decoder_input = decoder_input.to(DEVICE)
+            decoder_targets = decoder_targets.to(DEVICE)
+            initial_decoder_inputs = initial_decoder_inputs.to(DEVICE)
+
+            logits = model(
+                input_ids=encoder_input,
+                attention_mask=encoder_mask,
+                decoder_input_ids=decoder_input,
+            )['logits']
+
+            non_pad = decoder_targets != PAD_IDX
+            loss = criterion(logits[non_pad], decoder_targets[non_pad])
+
+            num_tokens = torch.sum(non_pad).item()
+            total_loss += loss.item() * num_tokens
+            total_tokens += num_tokens
+
+            generated_ids = model.generate(
+                input_ids=encoder_input,
+                attention_mask=encoder_mask,
+                decoder_input_ids=initial_decoder_inputs,
+                generation_config=generation_config,
+            )
+            generated_queries.extend(
+                tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+            )
+
+    generated_queries = [query.strip() for query in generated_queries]
+    os.makedirs(os.path.dirname(model_sql_path), exist_ok=True)
+    os.makedirs(os.path.dirname(model_record_path), exist_ok=True)
+    save_queries_and_records(generated_queries, model_sql_path, model_record_path)
+    sql_em, record_em, record_f1, error_msgs = compute_metrics(
+        gt_sql_pth,
+        model_sql_path,
+        gt_record_path,
+        model_record_path,
+    )
+    error_rate = float(np.mean([bool(msg) for msg in error_msgs])) if error_msgs else 0.0
+    avg_loss = total_loss / max(total_tokens, 1)
+    return avg_loss, record_f1, record_em, sql_em, error_rate
         
 def test_inference(args, model, test_loader, model_sql_path, model_record_path):
     '''
     You must implement inference to compute your model's generated SQL queries and its associated 
     database records. Implementation should be very similar to eval_epoch.
     '''
-    pass
+    model.eval()
+    tokenizer = T5TokenizerFast.from_pretrained(MODEL_NAME)
+    generation_config = build_generation_config(args, model)
+    generated_queries = []
+
+    with torch.no_grad():
+        for encoder_input, encoder_mask, initial_decoder_inputs in tqdm(test_loader):
+            encoder_input = encoder_input.to(DEVICE)
+            encoder_mask = encoder_mask.to(DEVICE)
+            initial_decoder_inputs = initial_decoder_inputs.to(DEVICE)
+
+            generated_ids = model.generate(
+                input_ids=encoder_input,
+                attention_mask=encoder_mask,
+                decoder_input_ids=initial_decoder_inputs,
+                generation_config=generation_config,
+            )
+            generated_queries.extend(
+                tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+            )
+
+    generated_queries = [query.strip() for query in generated_queries]
+    os.makedirs(os.path.dirname(model_sql_path), exist_ok=True)
+    os.makedirs(os.path.dirname(model_record_path), exist_ok=True)
+    save_queries_and_records(generated_queries, model_sql_path, model_record_path)
+
+def get_prediction_paths(args, split):
+    model_type = 'ft' if args.finetune else 'scr'
+    sql_path = os.path.join(f'results/t5_{model_type}_{args.experiment_name}_{split}.sql')
+    record_path = os.path.join(f'records/t5_{model_type}_{args.experiment_name}_{split}.pkl')
+    return sql_path, record_path
+
+def run_dev_eval(args, model, dev_loader):
+    gt_sql_path = os.path.join(f'data/dev.sql')
+    gt_record_path = os.path.join('records/ground_truth_dev.pkl')
+    model_sql_path, model_record_path = get_prediction_paths(args, 'dev')
+    dev_loss, dev_record_f1, dev_record_em, dev_sql_em, dev_error_rate = eval_epoch(
+        args,
+        model,
+        dev_loader,
+        gt_sql_path,
+        model_sql_path,
+        gt_record_path,
+        model_record_path,
+    )
+    print(f"Dev set results: Loss: {dev_loss}, Record F1: {dev_record_f1}, Record EM: {dev_record_em}, SQL EM: {dev_sql_em}")
+    print(f"Dev set results: {dev_error_rate*100:.2f}% of the generated outputs led to SQL errors")
+
+def run_test_inference(args, model, test_loader):
+    model_sql_path, model_record_path = get_prediction_paths(args, 'test')
+    test_inference(args, model, test_loader, model_sql_path, model_record_path)
+    print(f"Test predictions written to {model_sql_path}")
+    print(f"Test records written to {model_record_path}")
 
 def main():
     # Get key arguments
@@ -155,6 +276,22 @@ def main():
     if args.use_wandb:
         # Recommended: Using wandb (or tensorboard) for result logging can make experimentation easier
         setup_wandb(args)
+
+    if args.test_only:
+        test_loader = get_dataloader(args.test_batch_size, "test")
+        model = load_model_from_checkpoint(args, best=True)
+        model.eval()
+        run_test_inference(args, model, test_loader)
+        return
+
+    if args.eval_only:
+        dev_loader = get_dataloader(args.test_batch_size, "dev")
+        test_loader = get_dataloader(args.test_batch_size, "test")
+        model = load_model_from_checkpoint(args, best=True)
+        model.eval()
+        run_dev_eval(args, model, dev_loader)
+        run_test_inference(args, model, test_loader)
+        return
 
     # Load the data and the model
     train_loader, dev_loader, test_loader = load_t5_data(args.batch_size, args.test_batch_size)
@@ -169,22 +306,10 @@ def main():
     model.eval()
     
     # Dev set
-    experiment_name = args.experiment_name
-    model_type = 'ft' if args.finetune else 'scr'
-    gt_sql_path = os.path.join(f'data/dev.sql')
-    gt_record_path = os.path.join(f'records/dev_gt_records.pkl')
-    model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_dev.sql')
-    model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_dev.pkl')
-    dev_loss, dev_record_em, dev_record_f1, dev_sql_em, dev_error_rate = eval_epoch(args, model, dev_loader,
-                                                                                    gt_sql_path, model_sql_path,
-                                                                                    gt_record_path, model_record_path)
-    print("Dev set results: Loss: {dev_loss}, Record F1: {dev_record_f1}, Record EM: {dev_record_em}, SQL EM: {dev_sql_em}")
-    print(f"Dev set results: {dev_error_rate*100:.2f}% of the generated outputs led to SQL errors")
+    run_dev_eval(args, model, dev_loader)
 
     # Test set
-    model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_test.sql')
-    model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_test.pkl')
-    test_inference(args, model, test_loader, model_sql_path, model_record_path)
+    run_test_inference(args, model, test_loader)
 
 if __name__ == "__main__":
     main()
