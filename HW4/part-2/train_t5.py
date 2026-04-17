@@ -21,6 +21,8 @@ def build_generation_config(args, model):
     return GenerationConfig(
         max_new_tokens=args.max_new_tokens,
         num_beams=args.num_beams,
+        length_penalty=args.length_penalty,
+        no_repeat_ngram_size=args.no_repeat_ngram_size,
         early_stopping=True,
         pad_token_id=model.config.pad_token_id,
         eos_token_id=model.config.eos_token_id,
@@ -39,24 +41,28 @@ def get_args():
     # Training hyperparameters
     parser.add_argument('--optimizer_type', type=str, default="AdamW", choices=["AdamW"],
                         help="What optimizer to use")
-    parser.add_argument('--learning_rate', type=float, default=1e-1)
+    parser.add_argument('--learning_rate', type=float, default=3e-4)
     parser.add_argument('--weight_decay', type=float, default=0)
 
-    parser.add_argument('--scheduler_type', type=str, default="cosine", choices=["none", "cosine", "linear"],
+    parser.add_argument('--scheduler_type', type=str, default="linear", choices=["none", "cosine", "linear"],
                         help="Whether to use a LR scheduler and what type to use if so")
-    parser.add_argument('--num_warmup_epochs', type=int, default=0,
+    parser.add_argument('--num_warmup_epochs', type=int, default=1,
                         help="How many epochs to warm up the learning rate for if using a scheduler")
-    parser.add_argument('--max_n_epochs', type=int, default=0,
+    parser.add_argument('--max_n_epochs', type=int, default=10,
                         help="How many epochs to train the model for")
-    parser.add_argument('--patience_epochs', type=int, default=0,
+    parser.add_argument('--patience_epochs', type=int, default=3,
                         help="If validation performance stops improving, how many epochs should we wait before stopping?")
 
     parser.add_argument('--use_wandb', action='store_true',
                         help="If set, we will use wandb to keep track of experiments")
     parser.add_argument('--experiment_name', type=str, default='experiment',
                         help="How should we name this experiment?")
+    parser.add_argument('--load_experiment_name', type=str, default=None,
+                        help="If set, load checkpoints from this experiment while writing outputs under experiment_name.")
     parser.add_argument('--eval_only', action='store_true',
                         help="Load the best checkpoint, run dev evaluation, then run test inference.")
+    parser.add_argument('--dev_only', action='store_true',
+                        help="Load the best checkpoint and only run dev evaluation.")
     parser.add_argument('--test_only', action='store_true',
                         help="Load the best checkpoint and only run test inference.")
 
@@ -67,6 +73,8 @@ def get_args():
     # Generation hyperparameters
     parser.add_argument('--max_new_tokens', type=int, default=384)
     parser.add_argument('--num_beams', type=int, default=4)
+    parser.add_argument('--length_penalty', type=float, default=1.0)
+    parser.add_argument('--no_repeat_ngram_size', type=int, default=0)
 
     args = parser.parse_args()
     return args
@@ -282,6 +290,13 @@ def main():
         model = load_model_from_checkpoint(args, best=True)
         model.eval()
         run_test_inference(args, model, test_loader)
+        return
+
+    if args.dev_only:
+        dev_loader = get_dataloader(args.test_batch_size, "dev")
+        model = load_model_from_checkpoint(args, best=True)
+        model.eval()
+        run_dev_eval(args, model, dev_loader)
         return
 
     if args.eval_only:

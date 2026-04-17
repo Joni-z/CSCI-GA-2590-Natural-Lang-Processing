@@ -34,6 +34,7 @@ HW4/part-1/out_*.txt
 HW4/part-2/checkpoints/
 HW4/part-2/records/*.pkl
 HW4/slurm/
+HW4/submission/
 
 # Jupyter runtime files
 *.nbconvert.ipynb

@@ -56,7 +56,8 @@ def save_model(checkpoint_dir, model, best):
 def load_model_from_checkpoint(args, best):
     # Load model from a checkpoint
     model_type = 'ft' if args.finetune else 'scr'
-    checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', args.experiment_name)
+    experiment_name = getattr(args, 'load_experiment_name', None) or args.experiment_name
+    checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', experiment_name)
     load_dir = os.path.join(checkpoint_dir, 'best' if best else 'last')
     if not os.path.exists(load_dir):
         load_dir = os.path.join(checkpoint_dir, 'last')

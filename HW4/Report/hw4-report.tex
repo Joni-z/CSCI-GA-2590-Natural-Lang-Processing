@@ -4,7 +4,7 @@
 
 \title{CSCI 2590: Assignment 4}
 
-\author{zz5070 \\ NetID: zz5070 \\ \texttt{TODO: add GitHub repository link}}
+\author{zz5070 \\ NetID: zz5070 \\ \texttt{https://github.com/Joni-z/CSCI-GA-2590-Natural-Lang-Processing}}
 
 \date{}
 
@@ -14,22 +14,22 @@
 \maketitle
 
 \section*{Q0. 1.}
-GitHub repository: \texttt{TODO: add repository URL containing both Part I and Part II code.}
+GitHub repository: \texttt{https://github.com/Joni-z/CSCI-GA-2590-Natural-Lang-Processing}
 
 \section*{Q2. 1.}
-My out-of-distribution transformation simulates light human typing noise while preserving the sentiment label of the movie review. For each input review, I tokenize the text with NLTK's word tokenizer and consider only alphabetic tokens longer than four characters. I seed a local random number generator using an MD5 hash of the original text so that the transformation is deterministic for a given example.
+My out-of-distribution transformation simulates informal mobile typing noise while preserving the sentiment label of the movie review. For each input review, I lowercase the text, tokenize it with NLTK's word tokenizer, and consider only alphabetic tokens longer than three characters. I seed a local random number generator using an MD5 hash of the original text so that the transformation is deterministic for a given example.
 
-For each eligible token, I apply one of three character-level perturbations with total probability 15\%: with probability 10\%, I replace one character by a neighboring key on a QWERTY keyboard; with probability 3\%, I delete one vowel; and with probability 2\%, I duplicate one alphabetic character. Punctuation, numbers, short words, and most words are left unchanged, and the transformed tokens are detokenized back into a sentence using \texttt{TreebankWordDetokenizer}.
+For each eligible token, I apply one of four character-level perturbations with total probability 45\%: with probability 22\%, I replace one character by a neighboring key on a QWERTY keyboard; with probability 9\%, I delete one vowel; with probability 8\%, I duplicate one alphabetic character; and with probability 6\%, I swap two adjacent internal alphabetic characters. Punctuation, numbers, and short words are left unchanged, and the transformed tokens are detokenized back into a sentence using \texttt{TreebankWordDetokenizer}.
 
 This is a reasonable transformation because user-generated text commonly contains small typos, missing letters, or repeated characters, especially in informal reviews. These changes usually do not alter the semantic content or sentiment label. For example, a positive review remains positive even if a word like ``excellent'' is typed as ``excelllent'' or ``excellnt''.
 
 \section*{Q3. 1}
 \textbf{Report \& Analysis}
     \begin{itemize}
-        \item The BERT model trained on the original IMDB training set achieved 93.116\% accuracy on the original test data and 91.296\% accuracy on the transformed test data.
-        \item The model trained with augmented data achieved 92.732\% accuracy on the original test data and 92.152\% accuracy on the transformed test data.
-        \item Data augmentation improved performance on the transformed test set from 91.296\% to 92.152\%, a gain of 0.856 percentage points. This suggests that exposing the model to typo-like perturbations during training made it more robust to the same kind of distribution shift at evaluation time.
-        \item Data augmentation slightly reduced performance on the original test set from 93.116\% to 92.732\%, a decrease of 0.384 percentage points. This tradeoff is expected: the augmented training distribution is noisier than the original one, so the model spends some capacity becoming invariant to spelling perturbations rather than fitting only clean text.
+        \item The BERT model trained on the original IMDB training set achieved 93.116\% accuracy on the original test data and 86.924\% accuracy on the transformed test data.
+        \item The model trained with augmented data achieved 93.080\% accuracy on the original test data and 89.432\% accuracy on the transformed test data.
+        \item Data augmentation improved performance on the transformed test set from 86.924\% to 89.432\%, a gain of 2.508 percentage points. This suggests that exposing the model to typo-like perturbations during training made it more robust to the same kind of distribution shift at evaluation time.
+        \item Data augmentation very slightly reduced performance on the original test set from 93.116\% to 93.080\%, a decrease of 0.036 percentage points. This small tradeoff is expected: the augmented training distribution is noisier than the original one, so the model spends some capacity becoming invariant to spelling perturbations rather than fitting only clean text.
         \item Intuitively, augmentation teaches the classifier that small spelling changes should not change the label. This reduces the model's reliance on exact surface forms and encourages more robust lexical representations. However, because the transformation only covers a narrow family of character-level noise, it does not protect against other OOD shifts such as paraphrases, domain changes, sarcasm, or more severe grammar errors.
     \end{itemize}
 
@@ -82,8 +82,8 @@ Design choice & Description \\
 \midrule
 Data processing & I converted each natural-language input into a text-to-text prompt of the form \texttt{translate English to SQL: query}. SQL targets were used as decoder targets for train and dev splits. For test examples, only the encoder input and the initial decoder token are provided. Batches use dynamic padding. \\
 Tokenization & I used HuggingFace's \texttt{T5TokenizerFast} from \texttt{t5-small} for both encoder inputs and decoder SQL outputs. Encoder inputs were tokenized with maximum length 128 and SQL outputs with maximum length 384. The decoder input is the target SQL shifted right by one position, with the T5 pad token used as the decoder start token. \\
-Architecture & I fine-tuned the full pretrained \texttt{t5-small} encoder-decoder model. I did not freeze any layers; all parameters were updated during fine-tuning. For generation, I used beam search with 4 beams and maximum 384 generated tokens. \\
-Hyperparameters & The fine-tuned model used AdamW, learning rate $3\times10^{-4}$, weight decay 0, batch size 16, dev/test batch size 16 during training, a linear learning-rate scheduler, 1 warmup epoch, maximum 10 epochs, and patience 3. The best checkpoint was selected using development Record F1. Final test inference used batch size 32 with the same beam-search settings. \\
+Architecture & I fine-tuned the full pretrained \texttt{t5-small} encoder-decoder model. I did not freeze any layers; all parameters were updated during fine-tuning. For final generation, I used beam search with 4 beams and maximum 512 generated tokens. \\
+Hyperparameters & The fine-tuned model used AdamW, learning rate $3\times10^{-4}$, weight decay 0, batch size 16, dev/test batch size 16 during training, a linear learning-rate scheduler, 1 warmup epoch, maximum 10 epochs, and patience 3. The best checkpoint was selected using development Record F1. Final test inference used batch size 16 or 32 depending on available hardware, with the same beam-search settings. I also applied a conservative SQL cleanup pass to generated queries with execution errors, fixing duplicate aliases, missing comparison operators, unmatched quotes, and small parenthesis imbalances. \\
 \bottomrule
 \end{tabular}
 \caption{Details of the best-performing T5 model configuration.}
@@ -102,7 +102,7 @@ Hyperparameters & The fine-tuned model used AdamW, learning rate $3\times10^{-4}
   \midrule
   \multicolumn{4}{l}{\textbf{Dev Results}} \\
   \midrule
-  T5 fine-tuned final checkpoint & 1.93 & 52.15 & 59.89 \\
+  T5 fine-tuned final submitted output & 1.93 & 60.73 & 70.49 \\
   T5 fine-tuned best epoch during training & 1.93 & 54.94 & 63.38 \\
   \midrule
   \multicolumn{4}{l}{\textbf{Test Results}} \\
@@ -114,7 +114,7 @@ Hyperparameters & The fine-tuned model used AdamW, learning rate $3\times10^{-4}
 \label{tab:results}
 \end{table}
 
-On the development set, the final selected checkpoint achieved Record F1 59.89, Record EM 52.15, and SQL Query EM 1.93. During training, the strongest logged Record F1 was 63.38 at epoch 7. The final test SQL and record files contain 432 predictions/records, matching the 432 test natural-language inputs. Executing generated test SQL locally produced 74 execution errors out of 432 queries, an execution-error rate of 17.13\%; this is not a test-set accuracy metric, but it is a useful sanity check on output validity.
+On the development set, the final submitted output achieved Record F1 70.49, Record EM 60.73, and SQL Query EM 1.93. During training, the strongest logged pre-cleanup Record F1 was 63.38 at epoch 7. Increasing generation length to 512 tokens and applying the conservative SQL cleanup pass reduced dev execution errors from 119 to 38. The final test SQL and record files contain 432 predictions/records, matching the 432 test natural-language inputs. Executing generated test SQL locally produced 34 execution errors out of 432 queries, an execution-error rate of 7.87\%; this is not a test-set accuracy metric, but it is a useful sanity check on output validity.
 
 \paragraph{Qualitative Error Analysis:}
 
@@ -124,10 +124,9 @@ On the development set, the final selected checkpoint achieved Record F1 59.89, 
     \toprule
     \textbf{Error Type} & \textbf{Example Of Error} & \textbf{Error Description} & \textbf{Statistics} \\
     \midrule
-    SQL syntax error & \texttt{arrival\_time flight\_1...} & The model often generated malformed SQL where an operator or connective was missing, or parentheses were unbalanced. These errors prevent SQLite from parsing the query. & 52/466 dev queries \\
-    Incomplete nested query & \texttt{SELECT MIN(... WHERE ... 'DALLAS'} & Some long fare or nested aggregation queries were truncated or ended before all parentheses and conditions were closed. This is likely related to long decoder sequences and difficult compositional SQL structure. & 22/466 dev queries \\
-    Execution timeout & \texttt{flights and prices from LA to Charlotte} & Some generated queries were syntactically acceptable enough to start execution but produced inefficient joins or overly broad conditions, causing the database execution to time out. & 30/466 dev queries \\
-    Invalid schema reference & \texttt{no such column: flight} & The model sometimes hallucinated column names or referenced aliases/tables that were not present in the generated \texttt{FROM} clause. This indicates imperfect schema grounding. & 15/466 dev queries \\
+    SQL syntax error & \texttt{arrival\_time flight\_1...} & Some generated queries still have malformed conditions or parentheses after cleanup, preventing SQLite from parsing the query. & 12/466 dev queries \\
+    Execution timeout or interruption & \texttt{flights and prices from LA to Charlotte} & A few generated queries are syntactically acceptable enough to start execution but produce inefficient joins or overly broad conditions, causing execution to be interrupted. & 4/466 dev queries \\
+    Invalid schema reference & \texttt{no such column: flight} & The model sometimes hallucinates column names or references aliases/tables that are not present in the generated \texttt{FROM} clause. This indicates imperfect schema grounding. & 22/466 dev queries \\
     \bottomrule
   \end{tabular}
   \label{tab:qualitative}
@@ -138,7 +137,10 @@ The main pattern is that the model often captures the broad intent of a query, s
 
 \section*{Q7.}
 
-Google Drive checkpoint link: \texttt{TODO: upload the checkpoint from part-2/checkpoints/ft\_experiments/experiment/best and add the link here.}
+Google Drive checkpoint link: \texttt{https://drive.google.com/file/d/1yVdm1LFkcTIko0TefTz-LFAlTdbCk5K7/view?usp=sharing}
+
+The checkpoint used for Q7 is stored locally at
+\texttt{part-2/checkpoints/ft\_experiments/experiment/best}. The submitted SQL and record files were generated from this checkpoint.
 
 \section*{Extra Credit:}
 I did not submit an extra credit model trained from scratch.

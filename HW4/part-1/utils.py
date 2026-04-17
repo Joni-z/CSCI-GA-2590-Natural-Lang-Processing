@@ -82,6 +82,24 @@ def _duplicate_character(token, rng):
     return token[:position + 1] + token[position] + token[position + 1:]
 
 
+def _transpose_adjacent(token, rng):
+    if len(token) <= 4:
+        return token
+
+    valid_positions = [
+        idx
+        for idx in range(1, len(token) - 2)
+        if token[idx].isalpha() and token[idx + 1].isalpha()
+    ]
+    if not valid_positions:
+        return token
+
+    position = rng.choice(valid_positions)
+    chars = list(token)
+    chars[position], chars[position + 1] = chars[position + 1], chars[position]
+    return "".join(chars)
+
+
 def example_transform(example):
     example["text"] = example["text"].lower()
     return example
@@ -113,16 +131,18 @@ def custom_transform(example):
     rng = random.Random(seed)
     transformed_tokens = []
 
-    for token in word_tokenize(example["text"]):
+    for token in word_tokenize(example["text"].lower()):
         transformed_token = token
-        if token.isalpha() and len(token) > 4:
+        if token.isalpha() and len(token) > 3:
             noise_roll = rng.random()
-            if noise_roll < 0.10:
+            if noise_roll < 0.22:
                 transformed_token = _inject_typo(transformed_token, rng)
-            elif noise_roll < 0.13:
+            elif noise_roll < 0.31:
                 transformed_token = _drop_vowel(transformed_token, rng)
-            elif noise_roll < 0.15:
+            elif noise_roll < 0.39:
                 transformed_token = _duplicate_character(transformed_token, rng)
+            elif noise_roll < 0.45:
+                transformed_token = _transpose_adjacent(transformed_token, rng)
 
         transformed_tokens.append(transformed_token)
 
